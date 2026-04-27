@@ -1,0 +1,136 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#0B1D3A', 'primaryTextColor': '#fff', 'primaryBorderColor': '#C78C1E', 'lineColor': '#3D5A1E', 'secondaryColor': '#3D5A1E', 'tertiaryColor': '#E8E8E8', 'fontSize': '14px'}}}%%
+
+graph TB
+    %% ── ŹRÓDŁA DANYCH ──
+    subgraph SENSORS["🎯 ŹRÓDŁA DANYCH — Symulowane sensory pola walki"]
+        S1["🛰️ Radary<br/><i>radar_detections</i>"]
+        S2["🚁 Drony<br/><i>drone_observations</i>"]
+        S3["🚛 Pojazdy<br/><i>vehicle_status</i>"]
+        S4["🪖 Żołnierze<br/><i>soldier_health</i>"]
+        S5["🌦️ Meteo<br/><i>weather_data</i>"]
+        S6["📡 SIGINT<br/><i>sigint_intercepts</i>"]
+        S7["📦 Logistyka<br/><i>ammo_logistics</i>"]
+    end
+
+    %% ── GENEROWANIE I PRZECHOWYWANIE ──
+    subgraph PREP["⚙️ PRZYGOTOWANIE DANYCH"]
+        GEN["🐍 generate_datasets.py<br/><i>Generuje 7 plików JSONL</i>"]
+        LH["🏠 Lakehouse<br/><i>IRONSHIELD_Lakehouse</i><br/>Przechowuje pliki JSONL"]
+        NB["📓 Fabric Notebook<br/><i>fabric_notebook_sender.py</i><br/>Czyta JSONL → wysyła do Event Hub<br/>TIME_SCALE = 0.5x"]
+    end
+
+    %% ── INGESTION ──
+    subgraph RTI["🔴 FABRIC REAL-TIME INTELLIGENCE"]
+
+        subgraph INGEST["📥 INGESTION"]
+            ES["⚡ Eventstream<br/><i>Custom App Source</i><br/>Event Hub SDK endpoint"]
+        end
+
+        subgraph STORE["🗄️ EVENTHOUSE — KQL Database"]
+            RAW["RawEvents<br/><i>dynamic → streaming ingestion</i>"]
+            UP["🔄 KQL Update Policies<br/><i>7 Extract Functions</i>"]
+            T1["RadarDetections"]
+            T2["DroneObservations"]
+            T3["VehicleStatus"]
+            T4["SoldierHealth"]
+            T5["WeatherData"]
+            T6["SigintIntercepts"]
+            T7["AmmoLogistics"]
+        end
+
+        subgraph DASH["📊 WIZUALIZACJA"]
+            RTD["📈 Real-Time Dashboard<br/><i>Auto-refresh 5s</i><br/>Mapa operacyjna │ Blue Force │ Hostile tracks<br/>Health alerts │ Logistyka │ SIGINT │ Pogoda"]
+        end
+
+        subgraph AGENTS["🤖 AI AGENTS"]
+            subgraph DA["💬 DATA AGENTS<br/><i>NL → KQL → odpowiedź</i>"]
+                DA1["🎖️ IRONSHIELD Intel<br/><i>Radar + Dron + SIGINT</i>"]
+                DA2["📦 IRONSHIELD Supply<br/><i>Ammo + Vehicle + Weather</i>"]
+                DA3["🩺 IRONSHIELD Medic<br/><i>Soldier + Vehicle</i>"]
+            end
+
+            subgraph OA["⚡ OPERATIONS AGENTS<br/>/ ACTIVATOR &#40;Reflex&#41;<br/><i>observe → analyze → decide → act</i>"]
+                OA1["🚨 Threat Response<br/><i>hostile contacts > próg</i>"]
+                OA2["📦 Logistics Optimizer<br/><i>ammo/fuel < 30%</i>"]
+                OA3["🚑 MEDEVAC Alert<br/><i>HR>200 / SpO2<90</i>"]
+                OA4["📡 EW Response<br/><i>SIGINT anomalia</i>"]
+            end
+        end
+    end
+
+    %% ── AKCJE I INTEGRACJA ──
+    subgraph ACTIONS["🔗 AKCJE I INTEGRACJA"]
+        PA["⚡ Power Automate<br/><i>Triggered by Operations Agent</i><br/>Adaptive Cards │ Approval workflows"]
+        TEAMS["💬 Microsoft Teams<br/><i>Kanał IRONSHIELD-OPS</i><br/>Alerty │ Human-in-the-loop │ Zatwierdzenia"]
+    end
+
+    %% ── GOVERNANCE ──
+    GOV["🛡️ Unity Catalog — Governance<br/><i>Klasyfikacja │ RBAC │ Audyt │ Lineage</i>"]
+
+    %% ── COMMANDER ──
+    CMD["👨‍✈️ DOWÓDCA<br/><i>Pyta agenty NL │ Ogląda dashboard │ Zatwierdza akcje w Teams</i>"]
+
+    %% ══════════════ CONNECTIONS ══════════════
+
+    %% Generowanie → Lakehouse → Notebook
+    S1 & S2 & S3 & S4 & S5 & S6 & S7 -.->|symulacja| GEN
+    GEN -->|7x JSONL| LH
+    LH -->|ABFSS read| NB
+
+    %% Notebook → Eventstream → Eventhouse
+    NB -->|Event Hub SDK| ES
+    ES -->|Direct ingestion| RAW
+    RAW --> UP
+    UP --> T1 & T2 & T3 & T4 & T5 & T6 & T7
+
+    %% Eventhouse → Dashboard
+    T1 & T2 & T3 & T4 & T5 & T6 & T7 -->|KQL queries| RTD
+
+    %% Eventhouse → Data Agents
+    T1 & T2 & T6 -.->|źródło| DA1
+    T7 & T3 & T5 -.->|źródło| DA2
+    T4 & T3 -.->|źródło| DA3
+
+    %% Eventhouse → Operations Agents / Activator
+    T1 & T2 -->|monitor| OA1
+    T7 & T3 -->|monitor| OA2
+    T4 -->|monitor| OA3
+    T6 -->|monitor| OA4
+
+    %% Operations Agents → Power Automate → Teams
+    OA1 & OA2 & OA3 & OA4 -->|trigger| PA
+    PA -->|Adaptive Card| TEAMS
+
+    %% Governance
+    GOV -..-|governance| RTI
+
+    %% Commander interactions
+    CMD <-->|pytania NL| DA
+    CMD <-->|zatwierdzenia| TEAMS
+    CMD -->|obserwacja| RTD
+
+    %% ══════════════ STYLING ══════════════
+
+    classDef sensor fill:#1a3a5c,stroke:#C78C1E,color:#fff,stroke-width:2px
+    classDef prep fill:#2d4a1e,stroke:#C78C1E,color:#fff,stroke-width:2px
+    classDef ingest fill:#4a1a6b,stroke:#C78C1E,color:#fff,stroke-width:2px
+    classDef store fill:#0B1D3A,stroke:#C78C1E,color:#fff,stroke-width:2px
+    classDef table fill:#1a2d5a,stroke:#3D5A1E,color:#fff,stroke-width:1px
+    classDef dash fill:#5a3a1a,stroke:#C78C1E,color:#fff,stroke-width:2px
+    classDef dataagent fill:#1a4a3a,stroke:#C78C1E,color:#fff,stroke-width:2px
+    classDef opsagent fill:#5a1a1a,stroke:#CC2222,color:#fff,stroke-width:2px
+    classDef action fill:#3a1a5a,stroke:#C78C1E,color:#fff,stroke-width:2px
+    classDef gov fill:#3a3a3a,stroke:#C78C1E,color:#fff,stroke-width:2px
+    classDef cmd fill:#C78C1E,stroke:#0B1D3A,color:#0B1D3A,stroke-width:3px,font-weight:bold
+
+    class S1,S2,S3,S4,S5,S6,S7 sensor
+    class GEN,LH,NB prep
+    class ES ingest
+    class RAW,UP store
+    class T1,T2,T3,T4,T5,T6,T7 table
+    class RTD dash
+    class DA1,DA2,DA3 dataagent
+    class OA1,OA2,OA3,OA4 opsagent
+    class PA,TEAMS action
+    class GOV gov
+    class CMD cmd

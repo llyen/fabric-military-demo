@@ -1,0 +1,381 @@
+// ═══════════════════════════════════════════════════════════════
+// OPERATION IRONSHIELD – KQL Table Definitions for Eventhouse
+// Run these commands in your Eventhouse KQL Database
+// ═══════════════════════════════════════════════════════════════
+
+// --- 1. Radar Detections ---
+.create table RadarDetections (
+    EventId: string,
+    Timestamp: datetime,
+    Sector: string,
+    TrackId: string,
+    Classification: string,
+    ObjectType: string,
+    Latitude: real,
+    Longitude: real,
+    Speed_kmh: real,
+    Heading_deg: int,
+    DistanceToBlue_km: real,
+    Confidence: real,
+    RadarId: string
+)
+
+// --- 2. Vehicle Status ---
+.create table VehicleStatus (
+    EventId: string,
+    Timestamp: datetime,
+    VehicleId: string,
+    VehicleType: string,
+    UnitName: string,
+    Sector: string,
+    Latitude: real,
+    Longitude: real,
+    Speed_kmh: real,
+    Heading_deg: int,
+    EngineStatus: string,
+    FuelPercent: int,
+    AmmoPercent: int,
+    CrewCount: int,
+    CombatReady: bool
+)
+
+// --- 3. Soldier Health ---
+.create table SoldierHealth (
+    EventId: string,
+    Timestamp: datetime,
+    SoldierId: string,
+    UnitName: string,
+    Sector: string,
+    Latitude: real,
+    Longitude: real,
+    HeartRate: int,
+    BodyTemp: real,
+    BloodOxygen: int,
+    StressLevel: string,
+    MovementStatus: string
+)
+
+// --- 4. Drone Observations ---
+.create table DroneObservations (
+    EventId: string,
+    Timestamp: datetime,
+    DroneId: string,
+    DroneType: string,
+    Sector: string,
+    Latitude: real,
+    Longitude: real,
+    Altitude_m: int,
+    BatteryPercent: int,
+    ObservationType: string,
+    TargetClassification: string,
+    TargetCount: int,
+    Confidence: real,
+    TargetLatitude: real,
+    TargetLongitude: real,
+    ImageUrl: string
+)
+
+// --- 5. Weather Data ---
+.create table WeatherData (
+    EventId: string,
+    Timestamp: datetime,
+    StationId: string,
+    Sector: string,
+    Latitude: real,
+    Longitude: real,
+    Temperature_C: real,
+    WindSpeed_kmh: real,
+    WindDirection_deg: int,
+    Visibility_km: real,
+    CloudCeiling_m: int,
+    CloudCover_okta: int,
+    Precipitation: string,
+    HumidityPercent: int
+)
+
+// --- 6. SIGINT Intercepts ---
+.create table SigintIntercepts (
+    EventId: string,
+    Timestamp: datetime,
+    InterceptId: string,
+    Frequency_MHz: real,
+    SignalType: string,
+    Bearing_deg: int,
+    SignalStrength_dBm: real,
+    Duration_sec: int,
+    Classification: string,
+    AssociatedSector: string,
+    Confidence: real,
+    TranscriptAvailable: bool,
+    Notes: string
+)
+
+// --- 7. Ammo Logistics ---
+.create table AmmoLogistics (
+    EventId: string,
+    Timestamp: datetime,
+    ConvoyId: string,
+    CargoType: string,
+    Latitude: real,
+    Longitude: real,
+    Speed_kmh: real,
+    Status: string,
+    LoadAmmo_rounds: int,
+    LoadFuel_liters: int,
+    ETA_min: int,
+    DestinationUnit: string,
+    RouteRisk: string
+)
+
+// ═══════════════════════════════════════════════════════════════
+// RAW EVENTS TABLE (receives ALL events from Eventstream)
+// ═══════════════════════════════════════════════════════════════
+// Podejście A: Jeden Eventstream → jedna tabela RawEvents → KQL Update Policies
+// automatycznie routują dane do 7 tabel docelowych.
+
+.create table RawEvents (
+    RawData: dynamic
+)
+
+// Retain raw data for 1 day (cleanup after routing)
+.alter table RawEvents policy retention '{"SoftDeletePeriod": "1.00:00:00", "Recoverability": "Disabled"}'
+
+// Enable streaming ingestion (WYMAGANE dla Direct ingestion z Eventstream)
+.alter table RawEvents policy streamingingestion '{"IsEnabled": true}'
+
+// ═══════════════════════════════════════════════════════════════
+// INGESTION MAPPING for RawEvents (Eventstream → Eventhouse)
+// ═══════════════════════════════════════════════════════════════
+
+.create table RawEvents ingestion json mapping "RawEvents_mapping"
+    '[{"column":"RawData","path":"$","datatype":"dynamic"}]'
+
+// ═══════════════════════════════════════════════════════════════
+// EXTRACTION FUNCTIONS (used by Update Policies)
+// ═══════════════════════════════════════════════════════════════
+
+.create-or-alter function ExtractRadarDetections() {
+    RawEvents
+    | where tostring(RawData.stream) == "radar_detections"
+    | project
+        EventId       = tostring(RawData.EventId),
+        Timestamp     = todatetime(RawData.Timestamp),
+        Sector        = tostring(RawData.Sector),
+        TrackId       = tostring(RawData.TrackId),
+        Classification= tostring(RawData.Classification),
+        ObjectType    = tostring(RawData.ObjectType),
+        Latitude      = todouble(RawData.Latitude),
+        Longitude     = todouble(RawData.Longitude),
+        Speed_kmh     = todouble(RawData.Speed_kmh),
+        Heading_deg   = toint(RawData.Heading_deg),
+        DistanceToBlue_km = todouble(RawData.DistanceToBlue_km),
+        Confidence    = todouble(RawData.Confidence),
+        RadarId       = tostring(RawData.RadarId)
+}
+
+.create-or-alter function ExtractVehicleStatus() {
+    RawEvents
+    | where tostring(RawData.stream) == "vehicle_status"
+    | project
+        EventId       = tostring(RawData.EventId),
+        Timestamp     = todatetime(RawData.Timestamp),
+        VehicleId     = tostring(RawData.VehicleId),
+        VehicleType   = tostring(RawData.VehicleType),
+        UnitName      = tostring(RawData.UnitName),
+        Sector        = tostring(RawData.Sector),
+        Latitude      = todouble(RawData.Latitude),
+        Longitude     = todouble(RawData.Longitude),
+        Speed_kmh     = todouble(RawData.Speed_kmh),
+        Heading_deg   = toint(RawData.Heading_deg),
+        EngineStatus  = tostring(RawData.EngineStatus),
+        FuelPercent   = toint(RawData.FuelPercent),
+        AmmoPercent   = toint(RawData.AmmoPercent),
+        CrewCount     = toint(RawData.CrewCount),
+        CombatReady   = tobool(RawData.CombatReady)
+}
+
+.create-or-alter function ExtractSoldierHealth() {
+    RawEvents
+    | where tostring(RawData.stream) == "soldier_health"
+    | project
+        EventId       = tostring(RawData.EventId),
+        Timestamp     = todatetime(RawData.Timestamp),
+        SoldierId     = tostring(RawData.SoldierId),
+        UnitName      = tostring(RawData.UnitName),
+        Sector        = tostring(RawData.Sector),
+        Latitude      = todouble(RawData.Latitude),
+        Longitude     = todouble(RawData.Longitude),
+        HeartRate     = toint(RawData.HeartRate),
+        BodyTemp      = todouble(RawData.BodyTemp),
+        BloodOxygen   = toint(RawData.BloodOxygen),
+        StressLevel   = tostring(RawData.StressLevel),
+        MovementStatus= tostring(RawData.MovementStatus)
+}
+
+.create-or-alter function ExtractDroneObservations() {
+    RawEvents
+    | where tostring(RawData.stream) == "drone_observations"
+    | project
+        EventId            = tostring(RawData.EventId),
+        Timestamp          = todatetime(RawData.Timestamp),
+        DroneId            = tostring(RawData.DroneId),
+        DroneType          = tostring(RawData.DroneType),
+        Sector             = tostring(RawData.Sector),
+        Latitude           = todouble(RawData.Latitude),
+        Longitude          = todouble(RawData.Longitude),
+        Altitude_m         = toint(RawData.Altitude_m),
+        BatteryPercent     = toint(RawData.BatteryPercent),
+        ObservationType    = tostring(RawData.ObservationType),
+        TargetClassification = tostring(RawData.TargetClassification),
+        TargetCount        = toint(RawData.TargetCount),
+        Confidence         = todouble(RawData.Confidence),
+        TargetLatitude     = todouble(RawData.TargetLatitude),
+        TargetLongitude    = todouble(RawData.TargetLongitude),
+        ImageUrl           = tostring(RawData.ImageUrl)
+}
+
+.create-or-alter function ExtractWeatherData() {
+    RawEvents
+    | where tostring(RawData.stream) == "weather_data"
+    | project
+        EventId          = tostring(RawData.EventId),
+        Timestamp        = todatetime(RawData.Timestamp),
+        StationId        = tostring(RawData.StationId),
+        Sector           = tostring(RawData.Sector),
+        Latitude         = todouble(RawData.Latitude),
+        Longitude        = todouble(RawData.Longitude),
+        Temperature_C    = todouble(RawData.Temperature_C),
+        WindSpeed_kmh    = todouble(RawData.WindSpeed_kmh),
+        WindDirection_deg= toint(RawData.WindDirection_deg),
+        Visibility_km    = todouble(RawData.Visibility_km),
+        CloudCeiling_m   = toint(RawData.CloudCeiling_m),
+        CloudCover_okta  = toint(RawData.CloudCover_okta),
+        Precipitation    = tostring(RawData.Precipitation),
+        HumidityPercent  = toint(RawData.HumidityPercent)
+}
+
+.create-or-alter function ExtractSigintIntercepts() {
+    RawEvents
+    | where tostring(RawData.stream) == "sigint_intercepts"
+    | project
+        EventId            = tostring(RawData.EventId),
+        Timestamp          = todatetime(RawData.Timestamp),
+        InterceptId        = tostring(RawData.InterceptId),
+        Frequency_MHz      = todouble(RawData.Frequency_MHz),
+        SignalType         = tostring(RawData.SignalType),
+        Bearing_deg        = toint(RawData.Bearing_deg),
+        SignalStrength_dBm = todouble(RawData.SignalStrength_dBm),
+        Duration_sec       = toint(RawData.Duration_sec),
+        Classification     = tostring(RawData.Classification),
+        AssociatedSector   = tostring(RawData.AssociatedSector),
+        Confidence         = todouble(RawData.Confidence),
+        TranscriptAvailable= tobool(RawData.TranscriptAvailable),
+        Notes              = tostring(RawData.Notes)
+}
+
+.create-or-alter function ExtractAmmoLogistics() {
+    RawEvents
+    | where tostring(RawData.stream) == "ammo_logistics"
+    | project
+        EventId          = tostring(RawData.EventId),
+        Timestamp        = todatetime(RawData.Timestamp),
+        ConvoyId         = tostring(RawData.ConvoyId),
+        CargoType        = tostring(RawData.CargoType),
+        Latitude         = todouble(RawData.Latitude),
+        Longitude        = todouble(RawData.Longitude),
+        Speed_kmh        = todouble(RawData.Speed_kmh),
+        Status           = tostring(RawData.Status),
+        LoadAmmo_rounds  = toint(RawData.LoadAmmo_rounds),
+        LoadFuel_liters  = toint(RawData.LoadFuel_liters),
+        ETA_min          = toint(RawData.ETA_min),
+        DestinationUnit  = tostring(RawData.DestinationUnit),
+        RouteRisk        = tostring(RawData.RouteRisk)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UPDATE POLICIES (automatic routing from RawEvents → typed tables)
+// ═══════════════════════════════════════════════════════════════
+// Each policy triggers automatically when data arrives in RawEvents.
+// The extraction function filters by "stream" field and projects typed columns.
+
+.alter table RadarDetections policy update
+@'[{"IsEnabled": true, "Source": "RawEvents", "Query": "ExtractRadarDetections()", "IsTransactional": false, "PropagateIngestionProperties": false}]'
+
+.alter table VehicleStatus policy update
+@'[{"IsEnabled": true, "Source": "RawEvents", "Query": "ExtractVehicleStatus()", "IsTransactional": false, "PropagateIngestionProperties": false}]'
+
+.alter table SoldierHealth policy update
+@'[{"IsEnabled": true, "Source": "RawEvents", "Query": "ExtractSoldierHealth()", "IsTransactional": false, "PropagateIngestionProperties": false}]'
+
+.alter table DroneObservations policy update
+@'[{"IsEnabled": true, "Source": "RawEvents", "Query": "ExtractDroneObservations()", "IsTransactional": false, "PropagateIngestionProperties": false}]'
+
+.alter table WeatherData policy update
+@'[{"IsEnabled": true, "Source": "RawEvents", "Query": "ExtractWeatherData()", "IsTransactional": false, "PropagateIngestionProperties": false}]'
+
+.alter table SigintIntercepts policy update
+@'[{"IsEnabled": true, "Source": "RawEvents", "Query": "ExtractSigintIntercepts()", "IsTransactional": false, "PropagateIngestionProperties": false}]'
+
+.alter table AmmoLogistics policy update
+@'[{"IsEnabled": true, "Source": "RawEvents", "Query": "ExtractAmmoLogistics()", "IsTransactional": false, "PropagateIngestionProperties": false}]'
+
+// ═══════════════════════════════════════════════════════════════
+// INGESTION MAPPINGS (for direct ingestion / Approach B: 7 Eventstreams)
+// Use these only if routing via separate Eventstreams per stream.
+// ═══════════════════════════════════════════════════════════════
+
+.create table RadarDetections ingestion json mapping "RadarDetections_mapping"
+    '[{"column":"EventId","path":"$.EventId"},{"column":"Timestamp","path":"$.Timestamp"},{"column":"Sector","path":"$.Sector"},{"column":"TrackId","path":"$.TrackId"},{"column":"Classification","path":"$.Classification"},{"column":"ObjectType","path":"$.ObjectType"},{"column":"Latitude","path":"$.Latitude"},{"column":"Longitude","path":"$.Longitude"},{"column":"Speed_kmh","path":"$.Speed_kmh"},{"column":"Heading_deg","path":"$.Heading_deg"},{"column":"DistanceToBlue_km","path":"$.DistanceToBlue_km"},{"column":"Confidence","path":"$.Confidence"},{"column":"RadarId","path":"$.RadarId"}]'
+
+.create table VehicleStatus ingestion json mapping "VehicleStatus_mapping"
+    '[{"column":"EventId","path":"$.EventId"},{"column":"Timestamp","path":"$.Timestamp"},{"column":"VehicleId","path":"$.VehicleId"},{"column":"VehicleType","path":"$.VehicleType"},{"column":"UnitName","path":"$.UnitName"},{"column":"Sector","path":"$.Sector"},{"column":"Latitude","path":"$.Latitude"},{"column":"Longitude","path":"$.Longitude"},{"column":"Speed_kmh","path":"$.Speed_kmh"},{"column":"Heading_deg","path":"$.Heading_deg"},{"column":"EngineStatus","path":"$.EngineStatus"},{"column":"FuelPercent","path":"$.FuelPercent"},{"column":"AmmoPercent","path":"$.AmmoPercent"},{"column":"CrewCount","path":"$.CrewCount"},{"column":"CombatReady","path":"$.CombatReady"}]'
+
+.create table SoldierHealth ingestion json mapping "SoldierHealth_mapping"
+    '[{"column":"EventId","path":"$.EventId"},{"column":"Timestamp","path":"$.Timestamp"},{"column":"SoldierId","path":"$.SoldierId"},{"column":"UnitName","path":"$.UnitName"},{"column":"Sector","path":"$.Sector"},{"column":"Latitude","path":"$.Latitude"},{"column":"Longitude","path":"$.Longitude"},{"column":"HeartRate","path":"$.HeartRate"},{"column":"BodyTemp","path":"$.BodyTemp"},{"column":"BloodOxygen","path":"$.BloodOxygen"},{"column":"StressLevel","path":"$.StressLevel"},{"column":"MovementStatus","path":"$.MovementStatus"}]'
+
+// ═══════════════════════════════════════════════════════════════
+// SAMPLE ANALYTICAL QUERIES
+// ═══════════════════════════════════════════════════════════════
+
+// --- Hostile contacts in sector Bravo (last 10 min) ---
+RadarDetections
+| where Timestamp > ago(10m)
+| where Classification == "hostile" and Sector == "Bravo"
+| summarize 
+    ContactCount = dcount(TrackId),
+    AvgSpeed = avg(Speed_kmh),
+    AvgHeading = avg(Heading_deg),
+    MinDistance = min(DistanceToBlue_km),
+    MaxConfidence = max(Confidence)
+| extend ETA_min = round(MinDistance / (AvgSpeed / 60), 1)
+
+// --- Unit combat readiness ---
+VehicleStatus
+| where Timestamp > ago(2m)
+| summarize arg_max(Timestamp, *) by VehicleId
+| summarize 
+    ReadyCount = countif(CombatReady),
+    TotalCount = count(),
+    AvgAmmo = avg(AmmoPercent),
+    AvgFuel = avg(FuelPercent)
+  by UnitName
+| extend ReadinessPercent = round(100.0 * ReadyCount / TotalCount, 1)
+
+// --- Soldier health alerts ---
+SoldierHealth
+| where Timestamp > ago(5m)
+| summarize arg_max(Timestamp, *) by SoldierId
+| where HeartRate > 180 or BodyTemp > 39.0 or BloodOxygen < 92
+| project SoldierId, UnitName, Sector, HeartRate, BodyTemp, BloodOxygen, StressLevel,
+          AlertLevel = case(
+              HeartRate > 200 or BloodOxygen < 90, "CRITICAL",
+              HeartRate > 180 or BodyTemp > 39.0, "WARNING",
+              "MONITOR")
+| order by AlertLevel asc
+
+// --- Anomaly detection: spike in hostile contacts ---
+RadarDetections
+| where Classification == "hostile"
+| summarize ContactCount = dcount(TrackId) by bin(Timestamp, 1m), Sector
+| make-series ContactSeries = avg(ContactCount) on Timestamp step 1m by Sector
+| extend (Anomalies, AnomalyScore, ExpectedValue) = series_decompose_anomalies(ContactSeries, 2.5)

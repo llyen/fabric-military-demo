@@ -1,0 +1,18 @@
+# Enforce LF for text files
+* text=auto eol=lf
+
+# Treat as binary (no diff/merge)
+*.docx binary
+*.pptx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pbix binary
+
+# JSONL/JSON: text but no eol normalization (preserve as-is)
+*.jsonl text eol=lf
+*.json  text eol=lf
+*.kql   text eol=lf
+*.mmd   text eol=lf
+*.py    text eol=lf
+*.md    text eol=lf

@@ -1,0 +1,79 @@
+// ═══════════════════════════════════════════════════════════════
+// OPERATION IRONSHIELD – Real-Time Dashboard KQL Queries
+// Kopiuj query z tego pliku (NIE z Worda – Word wstawia ukryte znaki)
+// ═══════════════════════════════════════════════════════════════
+
+// ─── TILE 1: Mapa operacyjna (Map / Scatter Map) ───
+RadarDetections
+| where Timestamp > ago(5m)
+| project Latitude, Longitude, Classification, ObjectType, Confidence
+| extend Color = case(
+    Classification == "hostile", "red",
+    Classification == "friendly", "blue",
+    "gray")
+
+// ─── TILE 2: Status sil BLUE FORCE (Table / Multi-stat) ───
+VehicleStatus
+| where Timestamp > ago(2m)
+| summarize arg_max(Timestamp, *) by VehicleId
+| summarize 
+    ReadyCount = countif(CombatReady),
+    TotalCount = count(),
+    AvgAmmo = round(avg(AmmoPercent),0),
+    AvgFuel = round(avg(FuelPercent),0)
+  by UnitName
+
+// ─── TILE 3: Wykrycia hostile – os czasu (Time chart) ───
+RadarDetections
+| where Classification == "hostile"
+| summarize ContactCount = dcount(TrackId) by bin(Timestamp, 30s), Sector
+| render timechart
+
+// ─── TILE 4: Soldier health alerts (Table) ───
+SoldierHealth
+| where Timestamp > ago(3m)
+| summarize arg_max(Timestamp, *) by SoldierId
+| where HeartRate > 160 or BodyTemp > 38.5 or BloodOxygen < 93
+| project SoldierId, UnitName, Sector, HeartRate, BodyTemp, BloodOxygen, StressLevel
+| order by StressLevel asc
+
+// ─── TILE 5: Logistyka – stan amunicji (Bar chart / Table) ───
+AmmoLogistics
+| where Timestamp > ago(5m)
+| summarize arg_max(Timestamp, *) by ConvoyId
+| project ConvoyId, DestinationUnit, Status, LoadAmmo_rounds, ETA_min, RouteRisk
+| order by ETA_min asc
+
+// ─── TILE 6: Pogoda operacyjna (Table) ───
+WeatherData
+| where Timestamp > ago(5m)
+| summarize arg_max(Timestamp, *) by Sector
+| project Sector, Visibility_km, CloudCeiling_m, WindSpeed_kmh, Precipitation
+
+// ─── TILE 7: SIGINT activity (Time chart) ───
+SigintIntercepts
+| where Timestamp > ago(10m)
+| summarize Count = count() by bin(Timestamp, 1m), Classification
+| render timechart
+
+// ═══════════════════════════════════════════════════════════════
+// TILE DODATKOWY: Drone coverage (Map)
+// ═══════════════════════════════════════════════════════════════
+DroneObservations
+| where Timestamp > ago(5m)
+| project Latitude, Longitude, DroneId, BatteryPercent, ObservationType
+| extend Color = case(
+    BatteryPercent < 20, "red",
+    BatteryPercent < 50, "orange",
+    "green")
+
+// ═══════════════════════════════════════════════════════════════
+// WERYFIKACJA: Sprawdz czy dane plyna
+// ═══════════════════════════════════════════════════════════════
+RawEvents | count
+
+RadarDetections | count
+
+RawEvents
+| take 3
+| project tostring(RawData.stream), tostring(RawData.EventId), todatetime(RawData.Timestamp)
